@@ -2,6 +2,12 @@ const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
 const { PDFParse } = require('pdf-parse');
+require("dotenv").config();
+const { GoogleGenAI } = require("@google/genai");
+
+const ai = new GoogleGenAI({
+    apiKey: process.env.GEMINI_API_KEY,
+});
 
 const app = express();
 const upload = multer({ dest: "uploads/" });
@@ -55,22 +61,26 @@ app.post('/upload', upload.single("pdf"), async (req, res) => {
 
         const chunks = splitIntoChunks(text, 300, 50);
 
-        console.log(chunks);
+        console.log("1. Sending request to Gemini...");
 
-        return res.json({
-            totalChunks: chunks.length,
-            chunks
+        const response = await ai.models.generateContent({
+            model: "gemini-3.8-flash",
+            contents: `Explain this PDF content in simple words:
+            ${chunks[0]}`,
         });
 
+        console.log("2. Gemini response received!");
         console.log(chunks);
-
-        return res.json({
-            totalChunks: chunks.length,
-            chunks,
-        });
+        return res.send(response.text);
     } catch (error) {
 
         console.error(error);
+
+         if (error.status === 503) {
+        return res.status(503).send(
+            "Gemini is temporarily unavailable. Please try again later."
+        );
+    }
         return res.status(500).send("Error reading PDF");
 
     } finally {
