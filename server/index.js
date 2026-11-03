@@ -9,6 +9,8 @@ const ai = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY,
 });
 
+
+
 const app = express();
 const upload = multer({ dest: "uploads/" });
 
@@ -26,14 +28,16 @@ app.post('/upload', upload.single("pdf"), async (req, res) => {
             return res.status(400).send("Please upload a PDF");
         }
 
+        console.log("1. PDF uploaded");
         // Read PDF as binary data
         const dataBuffer = fs.readFileSync(req.file.path);
-
+        console.log("2. PDF read");
         // Create PDF parser
         parser = new PDFParse({ data: dataBuffer });
 
         // Extract text
         const pdfData = await parser.getText();
+        console.log("3. Text extracted");
 
         // console.log(pdfData.text);
 
@@ -60,13 +64,14 @@ app.post('/upload', upload.single("pdf"), async (req, res) => {
         const text = pdfData.text;
 
         const chunks = splitIntoChunks(text, 300, 50);
-
-        console.log("1. Sending request to Gemini...");
+        const fullText = chunks.join("\n");
+        console.log("4. Chunks created:", chunks.length);
+        console.log("5. Sending request to Gemini...");
 
         const response = await ai.models.generateContent({
-            model: "gemini-3.8-flash",
+            model: process.env.GEMINI_MODEL,
             contents: `Explain this PDF content in simple words:
-            ${chunks[0]}`,
+            ${fullText}`,
         });
 
         console.log("2. Gemini response received!");
@@ -74,13 +79,18 @@ app.post('/upload', upload.single("pdf"), async (req, res) => {
         return res.send(response.text);
     } catch (error) {
 
+        console.log("Status:", error.status);
+        console.log("Message:", error.message);
+        console.log("Details:", error.errorDetails);
+
+        // return res.status(500).send("Gemini API failed");
         console.error(error);
 
-         if (error.status === 503) {
-        return res.status(503).send(
-            "Gemini is temporarily unavailable. Please try again later."
-        );
-    }
+        if (error.status === 503) {
+            return res.status(503).send(
+                "Gemini is temporarily unavailable. Please try again later."
+            );
+        }
         return res.status(500).send("Error reading PDF");
 
     } finally {
